@@ -44,18 +44,19 @@ class PuzzleState:
         return distance
 
     def is_solvable(self):
-        # Achata o tabuleiro em uma lista
-        flat_board = [val for row in self.board for val in row if val != 0]
-        inversions = 0
-        for i in range(len(flat_board)):
-            for j in range(i + 1, len(flat_board)):
-                if flat_board[i] > flat_board[j]:
-                    inversions += 1
+        def count_inversions(board):
+            # Achata o tabuleiro em uma lista
+            flat_board = [val for row in board for val in row if val != 0]
+            inversions = 0
+            for i in range(len(flat_board)):
+                for j in range(i + 1, len(flat_board)):
+                    if flat_board[i] > flat_board[j]:
+                        inversions += 1
+            return inversions
 
-        # Para o 8-puzzle (grade 3x3), o puzzle e soluvel se
-        # o numero de inversoes tiver a mesma paridade que o estado objetivo.
-        # Nosso objetivo ((1,2,3), (4,5,6), (7,8,0)) tem 0 inversoes (par).
-        return inversions % 2 == 0
+        # Para o 8-puzzle (grade 3x3), o puzzle é solúvel se
+        # o número de inversões tiver a mesma paridade que o estado objetivo.
+        return count_inversions(self.board) % 2 == count_inversions(self.goal) % 2
 
     def __eq__(self, other):
         if isinstance(other, PuzzleState):

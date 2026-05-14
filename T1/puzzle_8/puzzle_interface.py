@@ -20,11 +20,12 @@ class PuzzleInterface:
     def __init__(self, root):
         self.root = root
         self.root.title("8-Puzzle Solver")
-        self.root.geometry("1100x850")
+        self.root.geometry("1200x850")
         self.root.configure(bg="#fefefe")
 
-        self.goal_board = ((1, 2, 3), (4, 0, 5), (6, 7, 8))
-        self.current_board = list(list(row) for row in self.goal_board)
+        # self.goal_board = [[1, 2, 3], [4, 0, 5], [6, 7, 8]]
+        self.goal_board = [[1, 2, 3], [4, 0, 5], [6, 7, 8]]
+        self.current_board = [list(row) for row in self.goal_board]
 
         self.is_animating = False
         self.search_buffer = []
@@ -33,8 +34,14 @@ class PuzzleInterface:
         # Registra a validação do Tkinter
         self.vcmd = (self.root.register(self._validate_input), "%d", "%P", "%W")
 
+        self.current_cells = []
+        self.current_vars = []
+        self.goal_cells = []
+        self.goal_vars = []
+
         self._setup_ui()
-        self._update_grid()
+        self._update_grid(self.current_board, self.current_vars, self.current_cells)
+        self._update_grid(self.goal_board, self.goal_vars, self.goal_cells)
 
     def _setup_ui(self):
         # Container Principal para separar Esquerda (Puzzle) da Direita (Terminal)
@@ -45,38 +52,32 @@ class PuzzleInterface:
         left_frame = tk.Frame(main_container, bg="#fefefe")
         left_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
-        # Frame do Tabuleiro
-        self.grid_frame = tk.Frame(left_frame, bg="#d0d0d0", padx=2, pady=2)
-        self.grid_frame.pack(pady=30)
+        # Container para os Tabuleiros
+        grids_container = tk.Frame(left_frame, bg="#fefefe")
+        grids_container.pack(pady=20)
 
-        self.cells = []
-        self.cell_vars = []
-        for r in range(3):
-            row_cells = []
-            row_vars = []
-            for c in range(3):
-                var = tk.StringVar()
-                entry = tk.Entry(
-                    self.grid_frame,
-                    textvariable=var,
-                    font=("Arial", 48, "bold"),
-                    width=3,
-                    justify="center",
-                    relief="flat",
-                    bd=0,
-                    validate="key",
-                    validatecommand=self.vcmd,
-                    bg="white",
-                )
-                entry.grid(row=r, column=c, padx=1, pady=1)
-                var.trace_add(
-                    "write",
-                    lambda *args, row=r, col=c, v=var: self._on_cell_write(row, col, v),
-                )
-                row_cells.append(entry)
-                row_vars.append(var)
-            self.cells.append(row_cells)
-            self.cell_vars.append(row_vars)
+        # Tabuleiro Atual
+        current_container = tk.Frame(grids_container, bg="#fefefe")
+        current_container.pack(side=tk.LEFT, padx=15)
+        tk.Label(
+            current_container,
+            text="Estado Atual",
+            font=("Arial", 12, "bold"),
+            bg="#fefefe",
+        ).pack(pady=5)
+        self.grid_frame = self._create_grid_ui(
+            current_container, self.current_vars, self.current_cells, self.current_board
+        )
+
+        # Tabuleiro Objetivo
+        goal_container = tk.Frame(grids_container, bg="#fefefe")
+        goal_container.pack(side=tk.LEFT, padx=15)
+        tk.Label(
+            goal_container, text="Objetivo", font=("Arial", 12, "bold"), bg="#fefefe"
+        ).pack(pady=5)
+        self.goal_grid_frame = self._create_grid_ui(
+            goal_container, self.goal_vars, self.goal_cells, self.goal_board
+        )
 
         # 1. Botões de Ação (Horizontal)
         action_frame = tk.Frame(left_frame, bg="#fefefe")
@@ -106,7 +107,7 @@ class PuzzleInterface:
 
         tk.Button(
             action_frame,
-            text="Resetar Objetivo",
+            text="Resetar Atual",
             command=self.reset_to_goal,
             width=15,
             bg="#e0e0e0",
@@ -285,44 +286,95 @@ class PuzzleInterface:
             return False
         if not ("0" <= proposed_val <= "8"):
             return False
+
+        # Identifica em qual grid estamos para validar duplicatas localmente
+        target_vars = self.current_vars
+        target_cells = self.current_cells
+
+        # Verifica se o widget pertence ao grid de objetivo
+        found_in_goal = False
+        for r in range(3):
+            for c in range(3):
+                if str(self.goal_cells[r][c]) == widget_name:
+                    target_vars = self.goal_vars
+                    target_cells = self.goal_cells
+                    found_in_goal = True
+                    break
+            if found_in_goal:
+                break
+
         for r in range(3):
             for c in range(3):
                 try:
-                    cell_widget = self.cells[r][c]
+                    cell_widget = target_cells[r][c]
                 except:
                     continue
                 if str(cell_widget) != widget_name:
-                    if self.cell_vars[r][c].get() == proposed_val:
+                    if target_vars[r][c].get() == proposed_val:
                         return False
         return True
 
-    def _on_cell_write(self, r, c, var):
+    def _on_cell_write(self, r, c, var, board, row_cells):
         val = var.get()
         if val.isdigit():
-            self.current_board[r][c] = int(val)
+            board[r][c] = int(val)
         else:
-            self.current_board[r][c] = -1
-        if val == "0":
-            self.cells[r][c].config(bg="#f0f0f0", fg="#f0f0f0")
-        elif val == "":
-            self.cells[r][c].config(bg="#f0f0f0")
-        else:
-            self.cells[r][c].config(bg="#ffffff", fg="#333333")
+            board[r][c] = -1
 
-    def _update_grid(self, board=None):
-        if board is None:
-            board = self.current_board
+        cell = row_cells[c]
+        if val == "0":
+            cell.config(bg="#f0f0f0", fg="#f0f0f0")
+        elif val == "":
+            cell.config(bg="#f0f0f0")
+        else:
+            cell.config(bg="#ffffff", fg="#333333")
+
+    def _update_grid(self, board, vars_list, cells_list):
         for r in range(3):
             for c in range(3):
                 val = board[r][c]
                 display_val = str(val) if val != -1 else ""
-                self.cell_vars[r][c].set(display_val)
+                vars_list[r][c].set(display_val)
                 if val == 0:
-                    self.cells[r][c].config(bg="#f0f0f0", fg="#f0f0f0")
+                    cells_list[r][c].config(bg="#f0f0f0", fg="#f0f0f0")
                 elif val == -1:
-                    self.cells[r][c].config(bg="#f0f0f0")
+                    cells_list[r][c].config(bg="#f0f0f0")
                 else:
-                    self.cells[r][c].config(bg="#ffffff", fg="#333333")
+                    cells_list[r][c].config(bg="#ffffff", fg="#333333")
+
+    def _create_grid_ui(self, parent, vars_list, cells_list, board):
+        grid_frame = tk.Frame(parent, bg="#d0d0d0", padx=2, pady=2)
+        grid_frame.pack()
+
+        for r in range(3):
+            row_cells = []
+            row_vars = []
+            for c in range(3):
+                var = tk.StringVar()
+                entry = tk.Entry(
+                    grid_frame,
+                    textvariable=var,
+                    font=("Arial", 32, "bold"),
+                    width=3,
+                    justify="center",
+                    relief="flat",
+                    bd=0,
+                    validate="key",
+                    validatecommand=self.vcmd,
+                    bg="white",
+                )
+                entry.grid(row=r, column=c, padx=1, pady=1)
+                var.trace_add(
+                    "write",
+                    lambda *args, row=r, col=c, v=var, b=board, clls=row_cells: (
+                        self._on_cell_write(row, col, v, b, clls)
+                    ),
+                )
+                row_cells.append(entry)
+                row_vars.append(var)
+            cells_list.append(row_cells)
+            vars_list.append(row_vars)
+        return grid_frame
 
     def _format_board_ascii(self, board):
         """Formata o tabuleiro no padrão:
@@ -354,27 +406,37 @@ class PuzzleInterface:
         if self.is_animating:
             return
         self.current_board = [[-1 for _ in range(3)] for _ in range(3)]
-        self._update_grid()
+        self._update_grid(self.current_board, self.current_vars, self.current_cells)
         self._clear_terminal()
 
     def reset_to_goal(self):
         if self.is_animating:
             return
-        self.current_board = list(list(row) for row in self.goal_board)
-        self._update_grid()
+        self.current_board = [list(row) for row in self.goal_board]
+        self._update_grid(self.current_board, self.current_vars, self.current_cells)
         self._clear_terminal()
 
     def shuffle_board(self):
         if self.is_animating:
             return
-        board = list(list(row) for row in self.goal_board)
+
+        # Garante que temos um objetivo válido antes de embaralhar
+        flat_goal = [val for row in self.goal_board for val in row]
+        if -1 in flat_goal or len(set(flat_goal)) != 9:
+            messagebox.showwarning(
+                "Aviso", "Preencha o objetivo corretamente antes de embaralhar!"
+            )
+            return
+
+        board = [list(row) for row in self.goal_board]
+        goal_tuple = tuple(tuple(row) for row in self.goal_board)
         for _ in range(30):
-            state = PuzzleState(tuple(tuple(row) for row in board))
+            state = PuzzleState(tuple(tuple(row) for row in board), goal=goal_tuple)
             neighbors = state.get_neighbors()
             if neighbors:
                 board = [list(row) for row in random.choice(neighbors)]
         self.current_board = board
-        self._update_grid()
+        self._update_grid(self.current_board, self.current_vars, self.current_cells)
         self._clear_terminal()
 
     def solve_puzzle(self):
@@ -385,17 +447,28 @@ class PuzzleInterface:
         self.steps_val_label.config(text="-")
         self._clear_terminal()
 
-        flat_board = [val for row in self.current_board for val in row]
-        if -1 in flat_board or len(set(flat_board)) != 9:
-            messagebox.showwarning("Aviso", "Preencha todos os campos corretamente!")
+        # Valida Estado Atual
+        flat_current = [val for row in self.current_board for val in row]
+        if -1 in flat_current or len(set(flat_current)) != 9:
+            messagebox.showwarning("Aviso", "Preencha o Estado Atual corretamente!")
+            return
+
+        # Valida Objetivo
+        flat_goal = [val for row in self.goal_board for val in row]
+        if -1 in flat_goal or len(set(flat_goal)) != 9:
+            messagebox.showwarning("Aviso", "Preencha o Objetivo corretamente!")
             return
 
         start_board = tuple(tuple(row) for row in self.current_board)
-        if not PuzzleState(start_board, goal=self.goal_board).is_solvable():
-            messagebox.showerror("Erro", "Este tabuleiro não possui solução!")
+        goal_board = tuple(tuple(row) for row in self.goal_board)
+
+        if not PuzzleState(start_board, goal=goal_board).is_solvable():
+            messagebox.showerror(
+                "Erro", "Este tabuleiro não possui solução para este objetivo!"
+            )
             return
 
-        pg = PuzzleGraph(goal_board=self.goal_board)
+        pg = PuzzleGraph(goal_board=goal_board)
         h = pg.get_heuristic
         algo_name = self.algo_var.get()
 
@@ -405,20 +478,20 @@ class PuzzleInterface:
         start_t = time.time()
         try:
             if algo_name == "BFS":
-                visited, path = bfs(pg, start_board, self.goal_board)
+                visited, path = bfs(pg, start_board, goal_board)
             elif algo_name == "DFS":
-                visited, path = dfs(pg, start_board, self.goal_board)
+                visited, path = dfs(pg, start_board, goal_board)
             elif algo_name == "DLS":
                 limit = self.depth_var.get()
-                visited, path = dls(pg, start_board, self.goal_board, limit)
+                visited, path = dls(pg, start_board, goal_board, limit)
             elif algo_name == "UCS":
-                visited, path = ucs(pg, start_board, self.goal_board)
+                visited, path = ucs(pg, start_board, goal_board)
             elif algo_name == "A*":
-                visited, path = a_star(pg, start_board, self.goal_board, h)
+                visited, path = a_star(pg, start_board, goal_board, h)
             elif algo_name == "IDA*":
-                visited, path = ida_star(pg, start_board, self.goal_board, h)
+                visited, path = ida_star(pg, start_board, goal_board, h)
             elif algo_name == "Greedy":
-                visited, path = greedy_search(pg, start_board, self.goal_board, h)
+                visited, path = greedy_search(pg, start_board, goal_board, h)
         except Exception as e:
             messagebox.showerror("Erro", str(e))
             return
@@ -502,11 +575,11 @@ class PuzzleInterface:
                     )
                     self.root.after(500, lambda: step(index + 1))
                 else:
-                    self._update_grid(state)
+                    self._update_grid(state, self.current_vars, self.current_cells)
                     # Colore o fundo de azul suave para indicar busca
                     for r in range(3):
                         for c in range(3):
-                            self.cells[r][c].config(bg="#e6f2ff")
+                            self.current_cells[r][c].config(bg="#e6f2ff")
                     self.root.after(delay, lambda: step(index + 1))
             else:
                 self.result_label.config(text="Mostrando caminho final!")
@@ -517,12 +590,14 @@ class PuzzleInterface:
     def animate_solution(self):
         def step(index):
             if index < len(self.solution_path):
-                self._update_grid(self.solution_path[index])
+                self._update_grid(
+                    self.solution_path[index], self.current_vars, self.current_cells
+                )
                 # Colore o fundo de azul para indicar solução
                 for r in range(3):
                     for c in range(3):
                         if self.solution_path[index][r][c] != 0:
-                            self.cells[r][c].config(bg="#a4c2f4")
+                            self.current_cells[r][c].config(bg="#a4c2f4")
 
                 delay = self.speed_scale.get()
                 self.root.after(delay, lambda: step(index + 1))
@@ -538,7 +613,8 @@ class PuzzleInterface:
     def _set_cells_state(self, state):
         for r in range(3):
             for c in range(3):
-                self.cells[r][c].config(state=state)
+                self.current_cells[r][c].config(state=state)
+                self.goal_cells[r][c].config(state=state)
 
 
 if __name__ == "__main__":
