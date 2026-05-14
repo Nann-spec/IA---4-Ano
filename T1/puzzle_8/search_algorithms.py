@@ -1,87 +1,96 @@
 import heapq
-from collections import defaultdict, deque
+from collections import deque
+
+
+def _reconstruct_path(came_from, current):
+    """Reconstrói o caminho percorrido a partir do dicionário de pais."""
+    path = []
+    while current is not None:
+        path.append(current)
+        current = came_from.get(current)
+    return path[::-1]
 
 
 def bfs(graph, start, goal):
-    queue = deque([(start, [start])])
-    visited = set()
+    """BFS otimizada com dicionário de pais."""
+    queue = deque([start])
+    came_from = {start: None}
     visited_order = []
 
     while queue:
-        current, path = queue.popleft()
-        if current in visited:
-            continue
-        visited.add(current)
+        current = queue.popleft()
         visited_order.append(current)
 
         if current == goal:
-            return visited_order, path
+            return visited_order, _reconstruct_path(came_from, current)
 
         for neighbor, weight in graph.get_adjacencies(current):
-            if neighbor not in visited:
-                queue.append((neighbor, path + [neighbor]))
+            if neighbor not in came_from:
+                came_from[neighbor] = current
+                queue.append(neighbor)
     return visited_order, None
 
 
 def dfs(graph, start, goal):
-    stack = [(start, [start])]
-    visited = set()
+    """DFS otimizada com conjunto de visitados e dicionário de pais."""
+    stack = [start]
+    came_from = {start: None}
     visited_order = []
-
-    # x = 0
+    visited = set()
 
     while stack:
-        # x = x + 1
-        # print(f"Visitando nó {x} vezes")
-        current, path = stack.pop()
+        current = stack.pop()
         if current in visited:
             continue
+
         visited.add(current)
         visited_order.append(current)
 
         if current == goal:
-            return visited_order, path
+            return visited_order, _reconstruct_path(came_from, current)
 
         for neighbor, weight in reversed(graph.get_adjacencies(current)):
             if neighbor not in visited:
-                stack.append((neighbor, path + [neighbor]))
+                came_from[neighbor] = current
+                stack.append(neighbor)
     return visited_order, None
 
 
 def ucs(graph, start, goal):
-    priority_queue = [(0, start, [start])]
-    costs = defaultdict(lambda: float("inf"))
-    costs[start] = 0
-    visited_order, explored = [], set()
+    """UCS otimizada com priority queue e g_costs."""
+    pq = [(0, start)]
+    came_from = {start: None}
+    g_costs = {start: 0}
+    visited_order = []
+    explored = set()
 
-    while priority_queue:
-        cost, current, path = heapq.heappop(priority_queue)
+    while pq:
+        cost, current = heapq.heappop(pq)
         if current in explored:
             continue
+
         explored.add(current)
         visited_order.append(current)
 
         if current == goal:
-            return visited_order, path
+            return visited_order, _reconstruct_path(came_from, current)
 
         for neighbor, weight in graph.get_adjacencies(current):
             new_cost = cost + weight
-            if new_cost < costs[neighbor]:
-                costs[neighbor] = new_cost
-                heapq.heappush(priority_queue, (new_cost, neighbor, path + [neighbor]))
+            if neighbor not in g_costs or new_cost < g_costs[neighbor]:
+                g_costs[neighbor] = new_cost
+                came_from[neighbor] = current
+                heapq.heappush(pq, (new_cost, neighbor))
     return visited_order, None
 
 
 def dls(graph, start, goal, limit):
-    stack = [(start, [start], 0)]
+    """DLS otimizada com limite de profundidade."""
+    stack = [(start, 0, [start])]
     visited_order = []
-    min_depths = defaultdict(lambda: float("inf"))
 
     while stack:
-        current, path, depth = stack.pop()
-        if depth >= min_depths[current]:
-            continue
-        min_depths[current] = depth
+        current, depth, path = stack.pop()
         visited_order.append(current)
 
         if current == goal:
@@ -89,67 +98,72 @@ def dls(graph, start, goal, limit):
 
         if depth < limit:
             for neighbor, weight in reversed(graph.get_adjacencies(current)):
-                if depth + 1 < min_depths[neighbor]:
-                    stack.append((neighbor, path + [neighbor], depth + 1))
+                if neighbor not in path:  # Evita ciclos no caminho atual
+                    stack.append((neighbor, depth + 1, path + [neighbor]))
     return visited_order, None
 
 
 def greedy_search(graph, start, goal, heuristic):
-    priority_queue = [(heuristic(start, goal), start, [start])]
-    visited_order, visited = [], set()
+    """Busca Gulosa otimizada."""
+    pq = [(heuristic(start, goal), start)]
+    came_from = {start: None}
+    visited_order = []
+    visited = set()
 
-    while priority_queue:
-        h_val, current, path = heapq.heappop(priority_queue)
+    while pq:
+        h, current = heapq.heappop(pq)
         if current in visited:
             continue
+
         visited.add(current)
         visited_order.append(current)
 
         if current == goal:
-            return visited_order, path
+            return visited_order, _reconstruct_path(came_from, current)
 
         for neighbor, weight in graph.get_adjacencies(current):
             if neighbor not in visited:
-                heapq.heappush(
-                    priority_queue,
-                    (heuristic(neighbor, goal), neighbor, path + [neighbor]),
-                )
+                came_from[neighbor] = current
+                heapq.heappush(pq, (heuristic(neighbor, goal), neighbor))
     return visited_order, None
 
 
 def a_star(graph, start, goal, heuristic):
-    priority_queue = [(heuristic(start, goal), start, [start], 0)]
-    g_costs = defaultdict(lambda: float("inf"))
-    g_costs[start] = 0
-    visited_order, explored = [], set()
+    """A* otimizado com f = g + h."""
+    pq = [(heuristic(start, goal), start, 0)]
+    came_from = {start: None}
+    g_costs = {start: 0}
+    visited_order = []
+    explored = set()
 
-    while priority_queue:
-        f_score, current, path, g_score = heapq.heappop(priority_queue)
+    while pq:
+        f, current, g = heapq.heappop(pq)
         if current in explored:
             continue
+
         explored.add(current)
         visited_order.append(current)
 
         if current == goal:
-            return visited_order, path
+            return visited_order, _reconstruct_path(came_from, current)
 
         for neighbor, weight in graph.get_adjacencies(current):
-            new_g = g_score + weight
-            if new_g < g_costs[neighbor]:
+            new_g = g + weight
+            if neighbor not in g_costs or new_g < g_costs[neighbor]:
                 g_costs[neighbor] = new_g
+                came_from[neighbor] = current
                 f_total = new_g + heuristic(neighbor, goal)
-                heapq.heappush(
-                    priority_queue, (f_total, neighbor, path + [neighbor], new_g)
-                )
+                heapq.heappush(pq, (f_total, neighbor, new_g))
     return visited_order, None
 
 
 def ida_star(graph, start, goal, heuristic):
+    """IDA* otimizado."""
     threshold = heuristic(start, goal)
     visited_order = []
-    path = [start]
 
     while True:
+        path = [start]
         result, t = _ida_recursive(
             graph, path, 0, threshold, goal, visited_order, heuristic
         )
