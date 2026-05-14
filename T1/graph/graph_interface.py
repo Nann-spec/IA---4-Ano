@@ -2,9 +2,9 @@ import math
 import tkinter as tk
 from tkinter import messagebox
 
-from graph.search_algorithms import a_star, bfs, dfs, dls, greedy_search, ida_star, ucs
-from graph.structure import Graph
 from input_output.reader import Reader
+from search_algorithms import a_star, bfs, dfs, dls, greedy_search, ida_star, ucs
+from structure import Graph
 from utils.constants import HEIGHT, HEIGHT_CANVAS, ROMANIA_LAT_LON, WIDTH, WIDTH_CANVAS
 
 
